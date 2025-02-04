@@ -104,10 +104,15 @@ public class ImpostorEntity : MonoBehaviour
     }
     public void moveObjectToCenter()
     {
-
-        transform.position = Vector3.zero;
-
-        ScaleObjectProportionally();
+        MeshRenderer meshRenderer = GetComponent<MeshRenderer>();
+        if (meshRenderer != null)
+        {
+            transform.position = Vector3.zero;
+            transform.position = transform.position - meshRenderer.bounds.center;
+            ScaleObjectProportionally();
+        }
+        
+        
     }
     void ScaleObjectProportionally()
     {
@@ -187,7 +192,7 @@ public class ImpostorEntity : MonoBehaviour
         GameObject cameraObject = new GameObject("Camera");
         Camera camera = cameraObject.AddComponent<Camera>();
         camera.orthographic = true;
-        camera.orthographicSize = 0.5f;
+        camera.orthographicSize = 0.6f;
         camera.clearFlags = CameraClearFlags.SolidColor;
         camera.backgroundColor = Color.black;
         camera.cullingMask = layerMask;

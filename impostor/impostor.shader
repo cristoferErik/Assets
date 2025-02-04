@@ -27,7 +27,6 @@
             {
                 float4 vertex : POSITION;
                 float2 uv : TEXCOORD0;
-
             };
 
             struct v2f
@@ -35,6 +34,7 @@
                 float2 uv : TEXCOORD0;
                 UNITY_FOG_COORDS(1)
                 float4 vertex : SV_POSITION;
+                float3 worldNormal : TEXCOORD1;
             };
 
             sampler2D _MainTex;
@@ -64,39 +64,40 @@
                 v2f o;
 
            
-                // Calcula la posición del centro del billboard en el espacio mundial
-                float3 centerWorldPos = mul(unity_ObjectToWorld, float4(0, 0, 0, 1)).xyz;
+                 // Calcula la posición del centro del billboard en el espacio mundial
+                 float3 centerWorldPos = mul(unity_ObjectToWorld, float4(0, 0, 0, 1)).xyz;
 
-                // Dirección de vista desde el objeto hacia la cámara
-                float3 viewDir = normalize(_WorldSpaceCameraPos - centerWorldPos);
-
-                viewDir.y = max(0.0, viewDir.y);
-                // Ejes del billboard
-                // Eje 'up' artificio, que me permitira hallar los demas vectores
-                
-                 // Bloquear la dirección de vista a la cuadrícula
-                 float3 up = abs(dot(float3(0, 1, 0),viewDir)) > 0.99
-                 ? float3(1, 0, 0)
-                 : float3(0, 1, 0);
-                float3 right = normalize(cross(up, viewDir));   // Eje 'right' perpendicular a viewDir
-                float3 newUp= normalize(cross(viewDir,right));// Eje 'up' recalculado perpendicular a viewDir y right, este si es perpendicular
-
-
-                // Reposiciona el vértice en base al centro del billboard, aplicando el offset en los ejes calculados
-                float3 rotatedPosition = centerWorldPos + (v.vertex.x * right + v.vertex.y*newUp);
-                
-                // Convierte la posición a espacio de clip
-                o.vertex = UnityWorldToClipPos(rotatedPosition);
+                 // Dirección de vista desde el objeto hacia la cámara
+                 float3 viewDir = normalize(_WorldSpaceCameraPos - centerWorldPos);
+ 
+                 viewDir.y = max(0.0, viewDir.y);
+                 // Ejes del billboard
+                 // Eje 'up' artificio, que me permitira hallar los demas vectores
+                 float3 up = float3(0, 1, 0);
+                 //Estos vectores deben estar normalizados
+                 if(abs(dot(up,viewDir))>0.99f){
+                     up=float3(1,0,0);
+                 }                   
+                 float3 right = normalize(cross(up, viewDir));   // Eje 'right' perpendicular a viewDir
+                 float3 newUp= normalize(cross(viewDir,right));// Eje 'up' recalculado perpendicular a viewDir y right, este si es perpendicular
+ 
+ 
+                 // Reposiciona el vértice en base al centro del billboard, aplicando el offset en los ejes calculados
+                 float3 rotatedPosition = centerWorldPos + (v.vertex.x * right + v.vertex.y*newUp);
+                 
+                 // Convierte la posición a espacio de clip
+                 o.vertex = UnityWorldToClipPos(rotatedPosition);
                 
                 float2 uvOrt = convertToSquare(viewDir);
-                float cellSize = 1.0 / _Grid;
                 
-                float2 cellO = floor(uvOrt / cellSize);
-                float2 cellV = floor(v.uv / cellSize);
+                float2 uvScaled = floor(uvOrt*_Grid);
+                float2 octScaled = floor(v.uv*_Grid);
+
+                float2 cellDistance = uvScaled - octScaled;
+                float2 uv = ((v.uv*_Grid) + cellDistance)/_Grid;
                 
-                float2 d = (cellO - cellV) * cellSize;
-                
-                o.uv = frac(v.uv + d);
+                o.uv = uv;
+                // Convierte la posición a espacio de clip
                 UNITY_TRANSFER_FOG(o, o.vertex);
                 return o;
             }
