@@ -42,9 +42,6 @@
             int _Grid;
             float _Cutoff;
 
-            int _PrevScaleOct;
-            float2 _PrevUv;
-
             float2 convertToSquare(float3 viewDir){
                 viewDir.y = max(0.0, viewDir.y);
                 float addCoord=abs(viewDir.x)+abs(viewDir.y)+abs(viewDir.z);
@@ -60,6 +57,19 @@
 
                 float2 uv = (coord*0.99f+1)*0.5f;
                 return uv;
+            }
+            float3 convertToHemioct(float3 uvGrid){
+                const float SQRT_2 = 1.41421356237;
+                //EL codigo de rotacion del rombo se escribe antes de tranformarlo a uv
+                float angle=radians(-45);
+
+                float2 coord= (float2 (uvGrid.x,uvGrid.z)/(SQRT_2));
+                float2 uv = (coord*2 - 1);
+                float Vx=uv.x*cos(angle) - uv.y.sin(angle);
+                float Vy=uv.x*sin(angle) + uv.y*cos(angle);
+                float y = 1 - (Vx+ Vy);
+                float3 viewDir = normalize(float3(Vx,y,Vy));
+                return viewDir;
             }
             v2f vert (appdata v)
             {
@@ -78,47 +88,43 @@
                     unity_ObjectToWorld[2].xyz  // Tercera fila (sin el componente de traslación)
                 );
  
-                 viewDir.y = max(0.0, viewDir.y);
-                 // Ejes del billboard
-                 // Eje 'up' artificio, que me permitira hallar los demas vectores
-                 float3 up = float3(0, 1, 0);
-                 //Estos vectores deben estar normalizados
-                /*
-                     if(abs(dot(up,viewDir))>0.99f){
-                        up=float3(1,0,0);
-                    }                   
-                */
-                 float3 right = normalize(cross(up, viewDir));   // Eje 'right' perpendicular a viewDir
-                 float3 newUp= normalize(cross(viewDir,right));// Eje 'up' recalculado perpendicular a viewDir y right, este si es perpendicular
- 
- 
-                 // Reposiciona el vértice en base al centro del billboard, aplicando el offset en los ejes calculados
-                 float3 rotatedPosition = centerWorldPos + (v.vertex.x * right + v.vertex.y*newUp);
-
-                // Convierte la posición a espacio de clip
-                o.vertex = UnityWorldToClipPos(rotatedPosition);
-
+                //Aqui usamos la rotacion del espacio 3d , y la vista para obtener la nueva direccion hacia el octahedro
                 viewDir = mul(rotationMatrix, viewDir);
                 
                 float2 uvOrt = convertToSquare(viewDir);
+                float2 uvRaw = v.uv;
+
+                float2 quantizedUvOrt = floor(uvOrt * _Grid);
+                float2 quantizedUv = floor(uvRaw * _Grid);
                 
-                float2 uvScaled = floor(uvOrt*_Grid);
-                float2 octScaled = floor(v.uv*_Grid);
-                 
                 
-                float2 cellDistance = uvScaled - octScaled;
-                float2 uv = ((v.uv*_Grid) + cellDistance)/_Grid;
+                float2 cellDistance = quantizedUvOrt-quantizedUv;
+                float2 uv = (v.uv*_Grid + cellDistance)/_Grid;
+                float3 rotatedPosition;
+                //Redondeamos y luego lo convertimos nuevamente en coordenadas de vista
+                if(length(cellDistance)<=0.001f){
+                    float3 viewRounded = convertToHemioct(float3(quantizedUvOrt.x,0,quantizedUvOrt.y)/_Grid);
+                    float3 up = float3(0, 1, 0);
+
+                    float3 right = normalize(cross(up, viewRounded));   // Eje 'right' perpendicular a viewDir
+                    float3 newUp= normalize(cross(viewRounded,right));// Eje 'up' recalculado perpendicular a viewDir y right, este si es perpendicular
+                    // Reposiciona el vértice en base al centro del billboard, aplicando el offset en los ejes calculados
+                    rotatedPosition = centerWorldPos + (v.vertex.x * right + v.vertex.y*newUp);
+                    
+                }
                 
+               
                 o.uv = uv;
                 // Convierte la posición a espacio de clip
+                o.vertex = UnityWorldToClipPos(rotatedPosition);
                 UNITY_TRANSFER_FOG(o, o.vertex);
                 return o;
             }
             
             fixed4 frag (v2f i) : SV_Target
             {
-                 // Mostrar la textura principal con blending
-                 fixed4 col = tex2D(_MainTex, i.uv);
+                // Mostrar la textura principal con blending
+                fixed4 col = tex2D(_MainTex, i.uv);
                 // Mostrar la textura principal con blending
                 return col;
             }
